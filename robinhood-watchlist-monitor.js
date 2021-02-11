@@ -144,17 +144,34 @@
         waitForKeyElements.controlObj = controlObj;
     }
 
+
+    // Local storage for limit prices so that they persist on refresh
+    var storage = {
+        setLimitPrice: function (symbol, limitTag, price) {
+            let key = symbol + '.' + limitTag;
+            localStorage.setItem(key, price);
+        },
+
+        getLimitPrice: function (symbol, limitTag) {
+            let key = symbol + '.' + limitTag;
+            return localStorage.getItem(key);
+        }
+    }
+
     class LimitPrice {
-        constructor(el, type, indicatorStyle, price = null) {
+        constructor(el, type, indicatorStyle, tag, price = null) {
             this.el = el;
             this.type = type;
+            this.tag = tag;
             this.indicatorStyle = indicatorStyle
 
             this.price = price;
             this.el.html(
-                '<input placeholder="$0.00" autocomplete="off" type="text" value=""></input>'
+                '<input type="limit-price-textbox" placeholder="$0.00" autocomplete="off" type="text" value=""></input>'
             );
             this.elTextbox = $(this.el.find('input'));
+            this.elTextbox.attr('tag', this.tag);
+            this.elTextbox.val(this.price);
         }
 
         getPrice() { return this.price; }
@@ -201,12 +218,17 @@
             // Create limit table cells
             this.limits = [];
             LIMITS_CONFIG.forEach(config => {
+                let limitPrice = storage.getLimitPrice(this.symbol, config.tag);
+                DEBUG_MODE && console.log("Init: " + this.symbol + "-" + config.tag + ": " + limitPrice);
                 this.limits.push(
-                    this.initLimitCell(config.limitType, config.indicatorStyle)
+                    this.initLimitCell(config.limitType, config.indicatorStyle, config.tag, limitPrice)
                 );
             });
 
             this.initListeners();
+            
+            // Update once to refresh indicators
+            this.update();
 
             // debug
             debugElement(this.elTableRow, 'green');
@@ -220,11 +242,11 @@
             return parseFloat(priceStr);
         }
 
-        initLimitCell(type, indicatorStyle, price = null) {
+        initLimitCell(type, indicatorStyle, tag, price = null) {
             // Use symbol cell as ref
             let cellRef = $(this.elTableRow.find('div[role="cell"]')[1]);
             let cell = $(cellRef.clone());
-            let limitPrice = new LimitPrice(cell.find('span'), type, indicatorStyle, price);
+            let limitPrice = new LimitPrice(cell.find('span'), type, indicatorStyle, tag, price);
 
             cell.on("click", e => e.preventDefault()); // disable click; otherise redirects to stock page
             this.elTableRow.children().first().append(cell);
@@ -241,7 +263,14 @@
                 //console.log("=========")
                 //console.log(event)
                 //console.log("---------")
+
                 stock.update();
+                // If the limit price has changed, then update local stograge
+                if ($(event.target).attr('type') === "limit-price-textbox") {
+                    let tag = $(event.target).attr('tag');
+                    let limitPrice = event.target.value;
+                    storage.setLimitPrice(stock.getSymbol(), tag, limitPrice);
+                }
             });
         }
 
