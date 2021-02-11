@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.1
 // @description  Adds additional columns to robinhood watchlist table
-//               to specifie price targets and monitor price limits.
+//               to specify price targets and monitor price limits.
 //               The price limit cells changes color when stock prices
 //               hit entry, price targets and stop loss limits.
 // @author       Ramsundar K G <kgram007@gmail.com>
