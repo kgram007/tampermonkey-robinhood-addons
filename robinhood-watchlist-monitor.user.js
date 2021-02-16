@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Robinhood Watchlist Monitor
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Adds additional columns to robinhood watchlist table
 //               to specify price targets and monitor price limits.
 //               The price limit cells changes color when stock prices
@@ -10,7 +10,7 @@
 // @match        https://robinhood.com/lists/*
 // @grant        none
 // @require      https://code.jquery.com/jquery-3.5.1.min.js
-// @updateURL    https://raw.githubusercontent.com/kgram007/tampermonkey-robinhood-addons/main/robinhood-watchlist-monitor.js
+// @updateURL    https://raw.githubusercontent.com/kgram007/tampermonkey-robinhood-addons/main/robinhood-watchlist-monitor.user.js
 // ==/UserScript==
 
 
@@ -176,6 +176,12 @@
         }
 
         getPrice() { return this.price; }
+        getPriceStr() { return (this.price != null) ? this.price : ''; }
+
+        setPrice(price) {
+            this.price = price;
+            this.elTextbox.val(price);
+        }
 
         setIndicator() {
             this.elTextbox.attr('style', this.indicatorStyle);
@@ -227,7 +233,7 @@
             });
 
             this.initListeners();
-            
+
             // Update once to refresh indicators
             this.update();
 
@@ -237,6 +243,16 @@
 
         getPrice() { return this.currentPrice; }
         getSymbol() { return this.symbol; }
+
+        getCSV() {
+            return this.symbol + ',' + this.limits.map(limit => limit.getPriceStr()).join(",");
+        }
+
+        setLimitValues(limitValues) {
+            for (let i = 0; i < limitValues.length; i++)
+                this.limits[i].setPrice(limitValues[i]);
+            this.update();
+        }
 
         parsePrice() {
             let priceStr = this.elPrice.text().trim().replace(/[^0-9\.]+/g, "");
@@ -311,6 +327,70 @@
         debugElement(elCellRef, 'yellow');
     }
 
+    function addGetLimitsCsvButton(el) {
+        el.prepend(
+            '<div> ' +
+            '  <button id="get-limits-csv" type="button">Get Limits CSV</button>' +
+            '</div>'
+        );
+
+        let elBtn = $('#get-limits-csv');
+        elBtn.attr('style',
+            'background-color: Transparent;' +
+            ' padding: 0.4em 1.2em;' +
+            ' border: 0.125em solid;' +
+            ' border-radius: 0.25em;' +
+            ' margin: 0 0.3em 0 0.3em;' +
+            ' font-weight: 300;' +
+            ' color: var(--rh__text-color);' +
+            ' cursor: pointer; '
+        ),
+
+            elBtn.click(function () {
+                let csvStr = "";
+                Object.values(stockList).forEach(stock => {
+                    csvStr += stock.getCSV() + '\n';
+                });
+                DEBUG_MODE && console.log("Limits CSV:\n" + csvStr);
+                prompt("Watchlist CSV: (Ctrl+C to copy to clipboard)", csvStr);
+            });
+    }
+
+    function addSetLimitsCsvButton(el) {
+        el.prepend(
+            '<div> ' +
+            '  <button id="set-limits-csv" type="button">Set Limits CSV</button>' +
+            '</div>'
+        );
+
+        let elBtn = $('#set-limits-csv');
+        elBtn.attr('style',
+            'background-color: Transparent;' +
+            ' padding: 0.4em 1.2em;' +
+            ' border: 0.125em solid;' +
+            ' border-radius: 0.25em;' +
+            ' margin: 0 0.3em 0 0.3em;' +
+            ' font-weight: 300;' +
+            ' color: var(--rh__text-color);' +
+            ' cursor: pointer; '
+        ),
+
+            elBtn.click(function () {
+                let csvStrList = prompt("Enter Limits CSV:");
+                DEBUG_MODE && console.log("Entered Limts CSV: ");
+                csvStrList.split('\n').forEach(csvStr => {
+                    if (csvStr) {
+                        DEBUG_MODE && console.log(csvStr);
+                        let csvArray = csvStr.split(',');
+                        let symbol = csvArray[0];
+                        let limitValues = csvArray.slice(1);
+                        if (symbol in stockList)
+                            stockList[symbol].setLimitValues(limitValues);
+                    }
+                });
+            });
+    }
+
     /* Start Here! */
     // Hide sidebar to create more space for watchlist table
     waitForKeyElements('.sidebar-content', function (el) {
@@ -336,7 +416,14 @@
         // init Row
         let stock = new Stock(elTableRow);
         stockList[stock.getSymbol()] = stock;
+    }, true);
 
+    waitForKeyElements('.main-container button[data-testid="ListDetailHeaderOverflowMenu"]', function (el) {
+        let elTopRight = el.parent().parent();
+        addSetLimitsCsvButton(elTopRight);
+        addGetLimitsCsvButton(elTopRight);
+
+        debugElement(elTopRight, 'purple');
     }, true);
 
 })();
